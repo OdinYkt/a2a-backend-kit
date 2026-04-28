@@ -9,21 +9,32 @@ route helpers exposed from :mod:`a2a_backend_kit.bootstrap`.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Union
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 
+ReadyResult = Union[bool, tuple[bool, str | None]]
+"""``ready_check`` may return either ``bool`` (terse) or
+``tuple[bool, str | None]`` (richer — second element becomes the
+``reason`` field of the 503 response)."""
+
+
 def mount_health_endpoints(
     app: FastAPI,
     *,
-    ready_check: Callable[[], bool] | None = None,
+    ready_check: Callable[[], ReadyResult] | None = None,
 ) -> None:
     """Add ``/healthz``, ``/health`` (liveness) and ``/readyz`` (readiness).
 
-    ``ready_check`` is invoked on every ``/readyz`` call. Returning
-    ``False`` makes ``/readyz`` respond with HTTP 503; otherwise the
-    endpoint reports HTTP 200.
+    ``ready_check`` is invoked on every ``/readyz`` call.
+
+    * Return ``True`` (or ``(True, ...)``) for HTTP 200.
+    * Return ``False`` (or ``(False, "reason")``) for HTTP 503; if a
+      reason is supplied it is exposed as ``{"status": "not_ready",
+      "reason": ...}`` so downstream tooling can disambiguate why the
+      backend is not ready.
     """
 
     @app.get("/healthz")
@@ -36,6 +47,16 @@ def mount_health_endpoints(
 
     @app.get("/readyz")
     async def readyz() -> JSONResponse:
-        if ready_check is not None and not ready_check():
-            return JSONResponse({"status": "not_ready"}, status_code=503)
-        return JSONResponse({"status": "ready"})
+        if ready_check is None:
+            return JSONResponse({"status": "ready"})
+        result = ready_check()
+        if isinstance(result, tuple):
+            ready, reason = result
+        else:
+            ready, reason = bool(result), None
+        if ready:
+            return JSONResponse({"status": "ready"})
+        body: dict[str, str] = {"status": "not_ready"}
+        if reason:
+            body["reason"] = reason
+        return JSONResponse(body, status_code=503)

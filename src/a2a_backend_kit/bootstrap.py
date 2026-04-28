@@ -77,7 +77,9 @@ def mount_a2a_routes(
     *,
     rpc_url: str = "/",
     include_rest: bool = True,
+    rest_path_prefix: str = "",
     context_builder: Any | None = None,
+    enable_v0_3_compat: bool = False,
 ) -> None:
     """Mount canonical A2A routes (JSON-RPC, REST, AgentCard) on ``app``.
 
@@ -85,14 +87,29 @@ def mount_a2a_routes(
     the supplied ``agent_card`` does not advertise a REST interface.
     AgentCard routes (``/.well-known/agent-card`` and
     ``/.well-known/agent-card.json``) are always mounted.
+
+    ``enable_v0_3_compat`` is forwarded to the SDK route factories so
+    backends can accept legacy v0.3 method names (``message/send``,
+    ``tasks/get``, ...) alongside the v1.0 surface — useful when serving
+    a population of clients that has not migrated to v1.0 yet.
     """
 
     cb = context_builder or KitContextBuilder()
-    for route in create_jsonrpc_routes(handler, rpc_url=rpc_url, context_builder=cb):
+    for route in create_jsonrpc_routes(
+        handler,
+        rpc_url=rpc_url,
+        context_builder=cb,
+        enable_v0_3_compat=enable_v0_3_compat,
+    ):
         app.router.routes.append(route)
 
     if include_rest and _card_advertises_rest(agent_card):
-        for route in create_rest_routes(handler, context_builder=cb, path_prefix=""):
+        for route in create_rest_routes(
+            handler,
+            context_builder=cb,
+            path_prefix=rest_path_prefix,
+            enable_v0_3_compat=enable_v0_3_compat,
+        ):
             app.router.routes.append(route)
 
     for route in create_agent_card_routes(agent_card):

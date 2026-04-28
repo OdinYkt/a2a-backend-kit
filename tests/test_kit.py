@@ -265,6 +265,18 @@ def test_mount_health_endpoints_returns_503_when_ready_check_fails() -> None:
     assert ready.json() == {"status": "ready"}
 
 
+def test_mount_health_endpoints_supports_tuple_ready_check_with_reason() -> None:
+    from a2a_backend_kit.bootstrap_health import mount_health_endpoints
+
+    app = FastAPI()
+    mount_health_endpoints(app, ready_check=lambda: (False, "state_unavailable"))
+
+    response = TestClient(app).get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "reason": "state_unavailable"}
+
+
 def test_build_default_handler_wires_kit_context_builder_by_default() -> None:
     from a2a_backend_kit.bootstrap import build_default_handler
     from a2a_backend_kit.context import KitContextBuilder
