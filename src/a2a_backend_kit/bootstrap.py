@@ -95,6 +95,14 @@ def mount_a2a_routes(
     """
 
     cb = context_builder or KitContextBuilder()
+
+    # AgentCard routes go first so they take precedence over the v0.3
+    # compat wildcard ``/{tenant}`` and ``/{tenant:path}`` routes that
+    # ``create_jsonrpc_routes`` / ``create_rest_routes`` register under
+    # the same prefix when ``enable_v0_3_compat=True``.
+    for route in create_agent_card_routes(agent_card):
+        app.router.routes.append(route)
+
     for route in create_jsonrpc_routes(
         handler,
         rpc_url=rpc_url,
@@ -111,9 +119,6 @@ def mount_a2a_routes(
             enable_v0_3_compat=enable_v0_3_compat,
         ):
             app.router.routes.append(route)
-
-    for route in create_agent_card_routes(agent_card):
-        app.router.routes.append(route)
 
 
 def make_app(
