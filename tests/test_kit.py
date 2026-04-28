@@ -170,6 +170,62 @@ def test_install_bearer_auth_allows_requests_when_no_credentials_configured() ->
     assert response.json()["headers"]["a2a-version"] == "1.0"
 
 
+def test_install_auth_invokes_validator_and_sets_returned_principal() -> None:
+    from a2a_backend_kit.auth import install_auth
+
+    captured: dict[str, str] = {}
+
+    def validator(scheme: str, value: str) -> dict[str, str] | None:
+        captured["scheme"] = scheme
+        captured["value"] = value
+        if scheme.lower() == "bearer" and value == "good":
+            return {"identity": "alice", "auth_scheme": "bearer"}
+        if scheme.lower() == "basic" and value == "QUxJQ0U6cGFzcw==":
+            return {"identity": "alice", "auth_scheme": "basic"}
+        return None
+
+    app = FastAPI()
+    install_auth(app, validator=validator, www_authenticate=("Bearer", 'Basic realm="x"'))
+
+    @app.get("/private")
+    async def private(request: Request) -> dict[str, Any]:
+        return {"principal": request.state.authenticated_principal}
+
+    client = TestClient(app)
+
+    bearer_ok = client.get("/private", headers={"Authorization": "Bearer good"})
+    basic_ok = client.get(
+        "/private", headers={"Authorization": "Basic QUxJQ0U6cGFzcw=="}
+    )
+    rejected = client.get("/private", headers={"Authorization": "Bearer bad"})
+    missing = client.get("/private")
+
+    assert bearer_ok.status_code == 200
+    assert bearer_ok.json()["principal"] == {"identity": "alice", "auth_scheme": "bearer"}
+    assert basic_ok.status_code == 200
+    assert basic_ok.json()["principal"] == {"identity": "alice", "auth_scheme": "basic"}
+    assert rejected.status_code == 401
+    assert rejected.headers["WWW-Authenticate"] == 'Bearer, Basic realm="x"'
+    assert missing.status_code == 401
+    assert captured["scheme"].lower() == "bearer"
+
+
+def test_install_auth_with_none_validator_is_passive_but_propagates_headers() -> None:
+    from a2a_backend_kit.auth import install_auth
+
+    app = FastAPI()
+    install_auth(app, validator=None)
+
+    @app.get("/anything")
+    async def anything(request: Request) -> dict[str, Any]:
+        return {"headers": request.state.a2a_headers}
+
+    response = TestClient(app).get("/anything", headers={"A2A-Version": "1.0"})
+
+    assert response.status_code == 200
+    assert response.json()["headers"]["a2a-version"] == "1.0"
+
+
 def test_kit_context_builder_preserves_explicit_v1_header() -> None:
     from a2a_backend_kit.context import KitContextBuilder
 
@@ -492,6 +548,7 @@ def test_package_exports_reviewed_contracts() -> None:
     import a2a_backend_kit
 
     for name in (
+        "AuthValidator",
         "make_app",
         "make_store",
         "setup_otel",
@@ -501,6 +558,8 @@ def test_package_exports_reviewed_contracts() -> None:
         "BearerCredential",
         "KitContextBuilder",
         "build_text_agent_card",
+        "install_auth",
+        "install_bearer_auth",
         "PROTOCOL_VERSION",
     ):
         assert hasattr(a2a_backend_kit, name)

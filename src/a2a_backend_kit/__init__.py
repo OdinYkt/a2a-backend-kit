@@ -10,14 +10,16 @@ corresponding names resolve to ``None``.
 """
 
 from .agent_card import PROTOCOL_VERSION, build_text_agent_card
-from .auth import BearerCredential, install_bearer_auth
+from .auth import AuthValidator, BearerCredential, install_auth, install_bearer_auth
 from .observability import setup_otel
 from .task_store import make_store
 
 __all__ = [
+    "AuthValidator",
     "BearerCredential",
     "PROTOCOL_VERSION",
     "build_text_agent_card",
+    "install_auth",
     "install_bearer_auth",
     "make_store",
     "setup_otel",
