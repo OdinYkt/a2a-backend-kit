@@ -25,6 +25,7 @@ def mount_health_endpoints(
     app: FastAPI,
     *,
     ready_check: Callable[[], ReadyResult] | None = None,
+    liveness_payload: dict[str, str] | None = None,
 ) -> None:
     """Add ``/healthz``, ``/health`` (liveness) and ``/readyz`` (readiness).
 
@@ -35,15 +36,21 @@ def mount_health_endpoints(
       reason is supplied it is exposed as ``{"status": "not_ready",
       "reason": ...}`` so downstream tooling can disambiguate why the
       backend is not ready.
+
+    ``liveness_payload`` lets backends customise the response body of
+    ``/healthz`` and ``/health`` (e.g. ``{"status": "live"}``).
+    Defaults to ``{"status": "ok"}``.
     """
+
+    payload = dict(liveness_payload) if liveness_payload else {"status": "ok"}
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
-        return {"status": "ok"}
+        return dict(payload)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return dict(payload)
 
     @app.get("/readyz")
     async def readyz() -> JSONResponse:
