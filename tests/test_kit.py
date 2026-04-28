@@ -510,7 +510,7 @@ def test_pyproject_declares_reviewed_dependencies() -> None:
     pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
 
     for dependency in (
-        "a2a-sdk>=1.0,<1.1",
+        "a2a-sdk>=0.3.26,<2.0",
         "fastapi>=0.115",
         "httpx>=0.27",
         "sse-starlette>=3.0",
