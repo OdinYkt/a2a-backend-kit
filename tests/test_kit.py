@@ -228,6 +228,104 @@ def test_install_auth_with_none_validator_is_passive_but_propagates_headers() ->
     assert response.json()["headers"]["a2a-version"] == "1.0"
 
 
+def test_mount_health_endpoints_returns_ok_by_default() -> None:
+    from a2a_backend_kit.bootstrap_health import mount_health_endpoints
+
+    app = FastAPI()
+    mount_health_endpoints(app)
+
+    client = TestClient(app)
+    healthz = client.get("/healthz")
+    health = client.get("/health")
+    readyz = client.get("/readyz")
+
+    assert healthz.status_code == 200
+    assert healthz.json() == {"status": "ok"}
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
+    assert readyz.status_code == 200
+    assert readyz.json() == {"status": "ready"}
+
+
+def test_mount_health_endpoints_returns_503_when_ready_check_fails() -> None:
+    from a2a_backend_kit.bootstrap_health import mount_health_endpoints
+
+    state = {"ready": False}
+    app = FastAPI()
+    mount_health_endpoints(app, ready_check=lambda: state["ready"])
+
+    client = TestClient(app)
+    not_ready = client.get("/readyz")
+    state["ready"] = True
+    ready = client.get("/readyz")
+
+    assert not_ready.status_code == 503
+    assert not_ready.json() == {"status": "not_ready"}
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ready"}
+
+
+def test_build_default_handler_wires_kit_context_builder_by_default() -> None:
+    from a2a_backend_kit.bootstrap import build_default_handler
+    from a2a_backend_kit.context import KitContextBuilder
+
+    class _DummyExecutor:
+        async def execute(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover
+            return None
+
+        async def cancel(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover
+            return None
+
+    handler = build_default_handler(
+        _DummyExecutor(),
+        agent_card=object(),
+    )
+
+    assert isinstance(handler._request_context_builder, KitContextBuilder)
+
+
+def test_mount_a2a_routes_publishes_canonical_agent_card_paths(monkeypatch) -> None:
+    """``mount_a2a_routes`` mounts the SDK-canonical AgentCard paths.
+
+    This is a smoke test against the SDK's own ``create_agent_card_routes``
+    helper to make sure the kit composes the canonical paths rather than
+    re-implementing them.
+    """
+
+    from a2a_backend_kit.bootstrap import build_default_handler, mount_a2a_routes
+    from a2a_backend_kit.agent_card import build_text_agent_card
+
+    card = build_text_agent_card(
+        name="Smoke",
+        description="Smoke",
+        version="0.0.1",
+        public_url="http://example.test",
+        skill_id="smoke",
+        skill_name="Smoke",
+        skill_description="Smoke",
+        streaming=False,
+    )
+
+    class _DummyExecutor:
+        async def execute(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover
+            return None
+
+        async def cancel(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover
+            return None
+
+    handler = build_default_handler(_DummyExecutor(), agent_card=card)
+    app = FastAPI()
+    mount_a2a_routes(app, handler, card)
+
+    routes = {
+        getattr(route, "path", None)
+        for route in app.router.routes
+    }
+    assert "/.well-known/agent-card.json" in routes
+    # JSON-RPC mounted at default rpc_url ("/")
+    assert "/" in routes
+
+
 def test_kit_context_builder_preserves_explicit_v1_header() -> None:
     from a2a_backend_kit.context import KitContextBuilder
 
@@ -559,9 +657,12 @@ def test_package_exports_reviewed_contracts() -> None:
         "BearerInterceptor",
         "BearerCredential",
         "KitContextBuilder",
+        "build_default_handler",
         "build_text_agent_card",
         "install_auth",
         "install_bearer_auth",
+        "mount_a2a_routes",
+        "mount_health_endpoints",
         "PROTOCOL_VERSION",
     ):
         assert hasattr(a2a_backend_kit, name)

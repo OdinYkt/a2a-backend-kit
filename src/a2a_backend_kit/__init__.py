@@ -46,8 +46,15 @@ from .context import KitContextBuilder  # noqa: E402
 
 __all__.append("KitContextBuilder")
 
+build_default_handler = None
+mount_a2a_routes = None
+
 try:
-    from .bootstrap import make_app  # noqa: F811
+    from .bootstrap import (  # noqa: F811
+        build_default_handler,
+        make_app,
+        mount_a2a_routes,
+    )
     from .peers import BearerInterceptor, Peer, PeerRegistry  # noqa: F811
 
     __all__.extend(
@@ -55,10 +62,18 @@ try:
             "BearerInterceptor",
             "Peer",
             "PeerRegistry",
+            "build_default_handler",
             "make_app",
+            "mount_a2a_routes",
         ]
     )
 except (ImportError, ModuleNotFoundError):
     # a2a-sdk lacks v1.0 surface (routes / interceptors / create_client).
     # The names above stay None so backends can detect the limitation.
     pass
+
+
+# mount_health_endpoints is SDK-agnostic; eager import.
+from .bootstrap_health import mount_health_endpoints  # noqa: E402
+
+__all__.append("mount_health_endpoints")
