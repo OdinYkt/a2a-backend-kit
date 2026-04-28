@@ -25,9 +25,15 @@ class BearerCredential:
     principal: str
 
 
-AuthValidator = Callable[[str, str], Any]
-"""Callable that takes (auth_scheme, auth_value) and returns a principal
-object on success or ``None`` to reject the request with 401."""
+AuthValidator = Callable[[Request, str, str], Any]
+"""Callable invoked as ``validator(request, auth_scheme, auth_value)``.
+
+Returns a principal object on success — stored at
+``request.state.authenticated_principal`` — or ``None`` to reject the
+request with 401. Validators may also mutate ``request.state`` to expose
+auxiliary fields (identity, capabilities, credential id, ...) that
+downstream context builders will read.
+"""
 
 
 def install_bearer_auth(
@@ -44,7 +50,7 @@ def install_bearer_auth(
 
     credential_tuple = tuple(credentials)
 
-    def validator(scheme: str, value: str) -> str | None:
+    def validator(_request: Request, scheme: str, value: str) -> str | None:
         if scheme.lower() != "bearer":
             return None
         match = _match_bearer(value, credential_tuple)
@@ -105,7 +111,7 @@ def install_auth(
         scheme, value = _split_authorization(request.headers.get("authorization", ""))
         if scheme is None:
             return _unauthorized(challenge_header)
-        principal = validator(scheme, value)
+        principal = validator(request, scheme, value)
         if principal is None:
             return _unauthorized(challenge_header)
         request.state.authenticated_principal = principal

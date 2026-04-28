@@ -175,12 +175,14 @@ def test_install_auth_invokes_validator_and_sets_returned_principal() -> None:
 
     captured: dict[str, str] = {}
 
-    def validator(scheme: str, value: str) -> dict[str, str] | None:
+    def validator(request: Request, scheme: str, value: str) -> dict[str, str] | None:
         captured["scheme"] = scheme
         captured["value"] = value
         if scheme.lower() == "bearer" and value == "good":
+            request.state.user_identity = "alice"
             return {"identity": "alice", "auth_scheme": "bearer"}
         if scheme.lower() == "basic" and value == "QUxJQ0U6cGFzcw==":
+            request.state.user_identity = "alice"
             return {"identity": "alice", "auth_scheme": "basic"}
         return None
 
