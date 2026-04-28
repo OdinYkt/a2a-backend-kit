@@ -11,14 +11,22 @@ corresponding names resolve to ``None``.
 
 from .agent_card import PROTOCOL_VERSION, build_text_agent_card
 from .auth import AuthValidator, BearerCredential, install_auth, install_bearer_auth
+from .context import (
+    DEFAULT_VERSION_WITHOUT_HEADER,
+    apply_a2a_version_header,
+    headers_with_a2a_version,
+)
 from .observability import setup_otel
 from .task_store import make_store
 
 __all__ = [
     "AuthValidator",
     "BearerCredential",
+    "DEFAULT_VERSION_WITHOUT_HEADER",
     "PROTOCOL_VERSION",
+    "apply_a2a_version_header",
     "build_text_agent_card",
+    "headers_with_a2a_version",
     "install_auth",
     "install_bearer_auth",
     "make_store",
@@ -27,20 +35,24 @@ __all__ = [
 
 
 make_app = None
-KitContextBuilder = None
 PeerRegistry = None
 Peer = None
 BearerInterceptor = None
 
+# KitContextBuilder is exported eagerly because the symbol always exists,
+# but it resolves to None on a2a-sdk 0.3 where DefaultServerCallContextBuilder
+# is unavailable.
+from .context import KitContextBuilder  # noqa: E402
+
+__all__.append("KitContextBuilder")
+
 try:
     from .bootstrap import make_app  # noqa: F811
-    from .context import KitContextBuilder  # noqa: F811
     from .peers import BearerInterceptor, Peer, PeerRegistry  # noqa: F811
 
     __all__.extend(
         [
             "BearerInterceptor",
-            "KitContextBuilder",
             "Peer",
             "PeerRegistry",
             "make_app",
@@ -48,5 +60,5 @@ try:
     )
 except (ImportError, ModuleNotFoundError):
     # a2a-sdk lacks v1.0 surface (routes / interceptors / create_client).
-    # The four names above stay None so backends can detect the limitation.
+    # The names above stay None so backends can detect the limitation.
     pass
